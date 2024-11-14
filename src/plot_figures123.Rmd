@@ -1,7 +1,11 @@
 ---
 title: "Trauma plots"
-output: html_document
-date: "2024-09-29"
+author: "Milla Juntunen and Mikko Arvas"
+date: "`r Sys.time()`"
+output:
+  html_document:
+    toc: true
+    theme: united
 ---
 
 ```{r setup, include=FALSE}

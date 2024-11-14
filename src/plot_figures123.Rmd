@@ -1,0 +1,501 @@
+---
+title: "Trauma plots"
+output: html_document
+date: "2024-09-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(sf)
+library(mapsFinland)
+library(ggpubr)
+```
+
+
+
+# Distribution of traumas
+
+```{r} 
+
+
+df_5x5traumas <- read.csv("../data/5x5_trauma_prob.csv", sep =",")
+traumadist <- ggplot(data = df_5x5traumas, aes(x = trauma_saatto_enn_sum*10 ))+
+  geom_histogram(binwidth = 0.1)+
+  scale_x_log10(breaks = c(0.0001,0.001,0.01,0.1,1,10,100))+
+  scale_y_log10()+
+  labs(x = "Estimated traumas per 25 km²", y = "Count") 
+  #coord_cartesian(xlim=c(0,1000))
+
+traumadist
+
+```
+N.B. as the x-axes is log10 squares with zero count are not shown at all.
+
+
+```{r}
+
+
+traumadist <- ggplot(data = df_5x5traumas, aes(x = trauma_saatto_enn_sum*10))+
+  geom_histogram(binwidth = 0.1) +
+  #scale_x_log10(breaks = c(0.0001,0.001,0.01,0.1,1,10,100))+
+  scale_x_continuous(
+    limits=c(-1,50),
+    name = "Traumas per 25 km²"
+#    breaks = c(0.0001,0.001,0.01,0.1,1,10,100)
+  )+
+  scale_y_log10(
+    name="Count"
+  )
+  #labs(x = "Estimated traumas per 25 km²", y = "Count") 
+  #coord_cartesian(xlim=c(0,1000))
+
+traumadist
+
+```
+
+```{r}
+
+summary(df_5x5traumas$trauma_saatto_enn_sum*10)
+
+
+```
+
+
+
+```{r}
+summary(df_5x5traumas$trauma_saatto_enn_sum*10 > 50)
+```
+
+
+
+```{r}
+summary(df_5x5traumas$trauma_saatto_enn_sum*10 > 100)
+```
+
+
+
+```{r}
+summary(df_5x5traumas$trauma_saatto_enn_sum*10 == 0)
+```
+
+
+
+```{r}
+
+traumadist <- traumadist + theme(
+  legend.text = element_text(size = 10)
+)
+
+ggsave(
+  plot = traumadist,
+  filename = "../results/traumadist.pdf",
+  width = 80,
+  height = 50,
+  units = "mm",
+  dpi=600
+  
+)
+
+
+ggsave(
+  plot = traumadist,
+  filename = "../results/traumadist.png",
+  width = 80,
+  height = 50,
+  units = "mm",
+  dpi=600
+  
+)
+
+
+```
+
+
+
+
+# Trauma map
+
+```{r}
+
+# 5x5 trauma data
+
+# define continent to leave out islands
+df_continent <- read.csv("../data/5x5km_grid_continent.csv", sep =",")
+
+#combine them 
+df_traumascomb <- merge(x=df_5x5traumas, y = df_continent, by = "nro")
+
+#leave out islands
+df_traumas <- filter(df_traumascomb, df_traumascomb$manner == 1)
+#df_traumas
+
+#store zeros as we want them to be white 
+zeros <- filter(df_traumas, df_traumas$trauma_saatto_enn_sum == 0)
+
+#filter out zeros to make log transfromation work
+df_traumas <- filter(df_traumas, df_traumas$trauma_saatto_enn_sum > 0)
+#Original predictions are event per year, make them per 10 years
+traumas <- df_traumas$trauma_saatto_enn_sum*10 
+
+traumas_map <- maakunta2019 %>%
+  st_transform(st_crs(3067)) %>%
+  ggplot() + 
+  geom_sf() +
+  geom_point(data = zeros, aes(euref_x, euref_y), color = "white",  size = 0.000001) +
+  geom_point(data = df_traumas, aes(euref_x, euref_y, color = traumas), size = 0.000001) +
+  scale_color_gradient(low  = "white", high = "blue", trans = "log10")+#, breaks = c(0.01, 0.1, 1, 10))+
+  #ggtitle("Predicted traumas in 10 years") + 
+  labs(x = "Longitude", y = "Latitude", color = "Traumas per 25 km²") +
+theme(legend.position='bottom',
+        legend.text = element_text(size=10),
+        legend.title.position = "bottom"
+        )
+traumas_map
+```
+
+
+# Population density map
+
+```{r}
+
+# File contains population density per 5x5 and whether the square is on the continent or not
+df_population <- read.csv("../data/5x5km_grid_continent_pop.csv", sep =",")
+
+df_population <- merge(x=df_5x5traumas, y = df_population, by = "nro")
+
+names(df_population)[9] <- "population"
+
+#Change NAs to zero
+df_population["population"][is.na(df_population["population"])] <- 0
+
+# Filtering the cells that are on the continent
+df_population <- filter(df_population, df_population$manner == 1) 
+df_zeros <- filter(df_population, df_population$population == 0) 
+# Filtering the cells that have 0 population (colored white)
+df_population <- filter(df_population, df_population$population > 0)
+
+population_map <- maakunta2019 %>%
+  st_transform(st_crs(3067)) %>%
+  ggplot() + 
+  geom_sf() +
+  geom_point(data = df_zeros, aes(euref_x, euref_y), color = "white",  size = 0.000001) +
+  geom_point(data = df_population, aes(euref_x, euref_y, color = population), size = 0.000001) +
+  scale_color_gradient(low  = "white", high = "red", trans = "log10")+#, breaks = c(1, 10, 100, 1000, 10000))+
+  #ggtitle("Population of Finland") + 
+  labs(x = "Longitude", y = "Latitude", color = "Inhabitants per 25 km²") +
+  theme(legend.position='bottom',
+        legend.text = element_text(
+          size=10),
+        legend.title.position = "bottom"
+        )
+population_map
+```
+
+
+
+
+
+
+```{r}
+# Yhdistetään nuo erilliset kartat
+# Jostakin syystä nuo kartat eivät lopputuloksessa ole yhtä suuria, tätä olen monella tapaa yrittänyt kiertää ilman tulosta :D
+maps_combined <- ggarrange(
+  traumas_map, 
+  population_map,
+  labels = c("A","B"),
+   vjust=2,
+   hjust=-1
+  )
+maps_combined
+```
+
+```{r}
+
+# does not plot labels, so we go with pdf
+ggsave(
+  plot = maps_combined,
+  filename = "../results/maps_combined.png",
+  width = 180,
+  height = 200,
+  units = "mm",
+  dpi=600
+)
+
+ggsave(
+  plot = maps_combined,
+  filename = "../results/maps_combined.pdf",
+  width = 180,
+  height = 180,
+  units = "mm",
+  dpi=600
+)
+
+
+```
+
+
+# Trauma and population density correlation
+
+
+```{r}
+
+p <- ggplot(df_population,
+  aes(
+    x=population,
+    y=trauma_saatto_enn_sum*10
+  )
+)
+p <- p + geom_point()
+p <- p +  labs(x = "Inhabitants per 25 km²", y = "Traumas per 25 km²")
+p <- p + theme(
+  legend.text = element_text(size = 10)
+)
+p
+
+
+```
+
+```{r}
+
+cor.test(x=df_population$population,
+    y=df_population$trauma_saatto_enn_sum*10
+)
+
+
+```
+
+
+
+```{r}
+
+distcombined <- ggarrange(
+  traumadist, 
+  p,
+  labels = c("A","B")
+  )
+distcombined
+
+
+```
+
+
+
+```{r}
+
+# does not plot labels, so pdf is better
+ggsave(
+  plot = maps_combined,
+  filename = "../results/maps_combined.png",
+  width = 180,
+  height = 200,
+  units = "mm",
+  dpi=600
+)
+
+ggsave(
+  plot = distcombined,
+  filename = "../results/dist_combined.pdf",
+  width = 180,
+  height = 100,
+  units = "mm",
+  dpi=600
+)
+
+
+```
+
+
+
+
+# Maps of selected hospitals by Wemelsfelder22 method 
+ 
+
+```{r}
+# Read location optimisation results and collect reachable and unreachable points
+results_df<- read.csv("../data/wemelsfelder22_t_30_s_100_5x5.csv", sep =",")
+unreachable_points <- results_df$'unreachable'
+hospitals_used <- results_df$'open_locs'
+
+# From F.csv read all map points  (H) and compare them to unreachable points.If a point is not among unreachable it is presumed reachable.
+# File contains map point ids, coords, and type (E = hospital , H = other)
+f <- read.csv("../data/F.csv", sep =",")
+f_H <- filter(f, type == 'H')
+
+# Read hospitals
+df_hospitals <- read.csv("../data/hospitals.csv", sep =",")
+# Fix naming of hospitals
+df_hospitals$name[df_hospitals$name == "Espoo"] <- "jorvi"
+df_hospitals$name[df_hospitals$name == "Vantaa"] <- "peijas"
+df_hospitals$name[df_hospitals$name == "helsinki"] <- "meilahti"
+
+# n corresponds to number of used hospitals (0 = 0, 1 = 5, 2 = 10, 3 = 15, 4 = 20 , 5 = 25)
+
+included_maps <- list()
+for (n in 1:5) {
+  #Variables to collect unreachable points (u)
+  id_u <- c() 
+  id_u_lat <- c()
+  id_u_lon <- c()
+  
+  #Variables to collect reachable poins (r)
+  id_r <- c()
+  id_r_lat <- c()
+  id_r_lon <- c()
+  
+  
+  n_points <- strsplit(unreachable_points[n], split = ',')
+  n_hospitals <-strsplit(hospitals_used[n], split = ',')
+  separated_hospitals <- n_hospitals[[1]]
+  separated_unreachable_points <- n_points[[1]]
+  
+  
+  for (row in 1:nrow(f_H)){
+    id = f_H[row, "name"]
+    lat = f_H[row, "lat"]
+    lon = f_H[row, "lon"]
+    if(id %in% separated_unreachable_points){
+      id_u <- c(id_u,id)
+      id_u_lat <- c(id_u_lat, lat)
+      id_u_lon <- c(id_u_lon, lon)
+    }else{
+      id_r <- c(id_r,id)
+      id_r_lat <- c(id_r_lat, lat)
+      id_r_lon <- c(id_r_lon, lon)
+    }
+  }
+  
+  #Make u and r data frames to fasiliate drawing. Fix co-ordinates that were wrong in the original file
+  df_unreachable <- data.frame(id_u_lat, id_u_lon, id_u, "unreachable")
+  colnames(df_unreachable)[2]<-"Lat"
+  colnames(df_unreachable)[1]<-"Lon"
+  
+  df_reachable <- data.frame(id_r_lat, id_r_lon, id_r, "reachable") 
+  colnames(df_reachable)[2]<-"Lat"
+  colnames(df_reachable)[1]<-"Lon"
+  
+  usedh_name <- c()
+  usedh_lat <- c()
+  usedh_lon <- c()
+  
+  unusedh_name <- c()
+  unusedh_lat <- c()
+  unusedh_lon <- c()
+  
+  for (row in 1:nrow(df_hospitals)){
+    
+    hospital <-tolower(df_hospitals[row, "name"])
+    lat <-df_hospitals[row, "lat"]
+    lon <-df_hospitals[row, "lon"]
+    
+    if(hospital %in% separated_hospitals){
+      usedh_name <- c(usedh_name,hospital)
+      usedh_lat <- c(usedh_lat, lat)
+      usedh_lon <- c(usedh_lon, lon)
+    }
+    else{
+      unusedh_name <- c(unusedh_name,hospital)
+      unusedh_lat <- c(unusedh_lat, lat)
+      unusedh_lon <- c(unusedh_lon, lon)
+    }
+  }
+  
+  # Make u and r data frames to faciliate drawing. Fix co-ordinates that were wrong in the original file
+  df_usedhospitals <- data.frame(usedh_lat, usedh_lon, usedh_name) 
+  colnames(df_usedhospitals)[2]<-"Lat"
+  colnames(df_usedhospitals)[1]<-"Lon"
+  
+  if(n != 5){
+    df_unusedhospitals <- data.frame(unusedh_lat, unusedh_lon, unusedh_name) 
+    colnames(df_unusedhospitals)[2]<-"Lat"
+    colnames(df_unusedhospitals)[1]<-"Lon"
+  }
+  
+  map <- hyvinvointialueet2023 %>%
+    st_transform(st_crs(3067)) %>%
+    ggplot() + 
+    geom_sf() +
+    #ggtitle("B")+ #abcdef  riippuen montako sairaalaa käytössä 
+    geom_point(data = df_unreachable, aes(Lon, Lat), size = 0.0000000003, color="grey") + 
+    geom_point(data = df_reachable, aes(Lon, Lat), size = 0.0000000003, color="grey") + #Change to pink if you want to see coverage by 
+    geom_point(data = df_usedhospitals, aes(Lon, Lat), size = 1, color="red")+ #Change to black if you don't want to show any selection 
+    if(n != 5){ geom_point(data = df_unusedhospitals, aes(Lon, Lat), size = 1,  color="black")}
+  map <- map +   xlab("Longitude") + ylab("Latitude")
+   
+  
+  map
+  included_maps <- c(included_maps, list(map))
+  ggsave(filename = paste0("../results/included_hospitals_",n,".pdf"  )
+           
+           )
+}
+```
+
+
+```{r}
+
+map0 <- included_maps[[1]]
+map0 <- map0 + geom_point(data = df_usedhospitals, aes(Lon, Lat), size = 1, color="black") +  xlab("Longitude") + ylab("Latitude")
+map0
+```
+
+
+
+```{r}
+
+
+
+includedmaps_combined <- ggarrange(
+  map0 + theme(
+    plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0.1, "cm"))
+  , #A
+  included_maps[[1]]  + theme(
+    plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0,"cm"))
+  , # B
+  included_maps[[2]] + theme(
+    plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0,"cm"))
+  , # C
+  included_maps[[3]] + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0.1,"cm"))
+  , # D
+  included_maps[[4]] + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0,"cm"))
+  , # E
+  included_maps[[5]] + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0,"cm"))
+  , # F
+  labels = c("A","B","C","D","E","F"),
+  align='hv',
+  #hjust=-1, 
+  vjust=1
+  )
+includedmaps_combined
+
+```
+
+```{r}
+
+ggsave(filename = "../results/included_hospitals_all.pdf",
+       plot = includedmaps_combined,  
+       width = 180,
+       height = 180,
+       units = "mm",
+       dpi=600
+)
+
+# does not plot labels, so pdf is better
+ggsave(filename = "../results/included_hospitals_all.png",
+       plot = includedmaps_combined,  
+       width = 180,
+       height = 180,
+       units = "mm",
+       dpi=600
+)
+
+
+```
+

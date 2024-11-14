@@ -1,4 +1,30 @@
+#Specifically ignore these
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+
+#In general ignore everything
+*
+*/*
+#Include .gitignore
+!.gitignore
+#Include all code in bin
+!bin/*.R
+!bin/*.sh
+!bin/*.py
+!bin/*.pl
+!bin/*.Rmd
+!src/*.R
+!src/*.sh
+!src/*.py
+!src/*.pl
+!src/*.Rmd
+#Include documentation
+!results/*.txt
+!results/*.rst
+!results/*.md
+#Include result .sh s
+!results/*/*.sh
+#Include .json files
+!bin/*.json

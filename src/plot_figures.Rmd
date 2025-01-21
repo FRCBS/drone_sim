@@ -1,6 +1,6 @@
 ---
-title: "Trauma plots"
-author: "Milla Juntunen and Mikko Arvas"
+title: "Drone simulation trauma plots"
+author: "Milla Juntunen, Panu Erästö and Mikko Arvas"
 date: "`r Sys.time()`"
 output:
   html_document:
@@ -539,15 +539,15 @@ head(traumpred)
 
 
 ```{r}
-load("../BCD_5_locations.RData")
+load("../results/BCD_5_locations.RData")
 bcd05 <- result_list
-load("../BCD_10_locations.RData")
+load("../results/BCD_10_locations.RData")
 bcd10 <- result_list
-load("../BCD_15_locations.RData")
+load("../results/BCD_15_locations.RData")
 bcd15 <- result_list
-load("../BCD_20_locations.RData")
+load("../results/BCD_20_locations.RData")
 bcd20 <- result_list
-load("../BCD_25_locations.RData")
+load("../results/BCD_25_locations.RData")
 bcd25 <- result_list
 
 result_list <- list(

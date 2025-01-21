@@ -18,6 +18,7 @@ library(tidyverse)
 library(sf)
 library(mapsFinland)
 library(ggpubr)
+library(readxl)
 ```
 
 
@@ -503,3 +504,203 @@ ggsave(filename = "../results/included_hospitals_all.png",
 
 ```
 
+
+# Reachable 1x1 squares example
+
+## Read data
+
+```{r}
+# Load 1x1km euref-coordinates together with variable continent
+df_1x1_grid <- read.csv("../data/1x1km_grid.csv", sep =";", header = TRUE, colClasses = c("numeric", "numeric", "numeric","numeric"))
+#df_1x1_grid$trauma_saatto_enn_sum=100 # This just defines the drawing colour 
+
+#leave out islands
+df_1x1_grid <- df_1x1_grid %>%  filter(manner == 1)
+dim(df_1x1_grid)
+```
+
+
+```{r}
+head(df_1x1_grid)
+```
+
+
+```{r}
+dim(df_1x1_grid)
+```
+
+
+```{r}
+# Load the file containing the corresponding temporary coordinates
+traumpred=read.csv(file = "../data/trauma_prob_1x1.csv",header = TRUE,sep=";",dec=",")
+head(traumpred)
+```
+
+
+
+```{r}
+load("../BCD_5_locations.RData")
+bcd05 <- result_list
+load("../BCD_10_locations.RData")
+bcd10 <- result_list
+load("../BCD_15_locations.RData")
+bcd15 <- result_list
+load("../BCD_20_locations.RData")
+bcd20 <- result_list
+load("../BCD_25_locations.RData")
+bcd25 <- result_list
+
+result_list <- list(
+  "bcd05" = bcd05,
+  "bcd10" = bcd10,
+  "bcd15" = bcd15,
+  "bcd20" = bcd20,
+  "bcd25" = bcd25
+)
+```
+
+##  Example 1x1 map
+
+
+```{r}
+
+# get the visited squares
+visited <- result_list$bcd05
+# Take the union of the INDICES of handled locations over the simulations
+temp<- Reduce(union, lapply(visited, function(x) x$handled_event_locations))
+# And attach the temporary coordinates from $nro to the indices 
+temp2 <- list() # 
+temp2$nro=traumpred$nro[temp]
+# And finally combine the temporary coordinates to real (euref-) coordinates
+df_vis <- merge(x=temp2, y = df_1x1_grid, by = "nro")
+
+
+# Take the union of the INDICES of handled locations over the simulations
+temp<- Reduce(union, lapply(visited, function(x) x$non_handled_event_locations))
+# And attach the temporary coordinates from $nro to the indices 
+temp2 <- list() # 
+temp2$nro=traumpred$nro[temp]
+# And finally combine the temporary coordinates to real (euref-) coordinates
+df_nonvis <- merge(x=temp2, y = df_1x1_grid, by = "nro")
+
+zeros <- df_1x1_grid %>%  filter(! df_1x1_grid$nro %in% c(df_vis$nro,df_nonvis$nro) ) 
+
+traumas_map <- maakunta2019 %>%
+  st_transform(st_crs(3067)) %>%
+  ggplot() + 
+  geom_sf() +
+  geom_point(data = zeros, aes(euref_x, euref_y), color = "white",  size = 0.000001) +
+  geom_point(data = df_nonvis, aes(euref_x, euref_y), color = "grey", size = 0.000001) +
+  geom_point(data = df_vis, aes(euref_x, euref_y), color = "red", size = 0.000001) +
+  labs(x = "Longitude", y = "Latitude") +
+theme(legend.position='none',
+        legend.text = element_text(size=10),
+        legend.title.position = "bottom"
+        )
+traumas_map
+
+
+
+```
+
+## Combined map
+
+```{r}
+
+# n corresponds to number of used hospitals (0 = 0, 1 = 5, 2 = 10, 3 = 15, 4 = 20 , 5 = 25)
+sim_maps <- list()
+for (n in names(result_list)) {
+  # get the visited squares
+  visited <- result_list[[n]]
+  # Take the union of the INDICES of handled locations over the simulations
+  temp<- Reduce(union, lapply(visited, function(x) x$handled_event_locations))
+  # And attach the temporary coordinates from $nro to the indices 
+  temp2 <- list() # 
+  temp2$nro=traumpred$nro[temp]
+  # And finally combine the temporary coordinates to real (euref-) coordinates
+  df_vis <- merge(x=temp2, y = df_1x1_grid, by = "nro")
+  
+  # Take the union of the INDICES of handled locations over the simulations
+  temp<- Reduce(union, lapply(visited, function(x) x$non_handled_event_locations))
+  # And attach the temporary coordinates from $nro to the indices 
+  temp2 <- list() # 
+  temp2$nro=traumpred$nro[temp]
+  # And finally combine the temporary coordinates to real (euref-) coordinates
+  df_nonvis <- merge(x=temp2, y = df_1x1_grid, by = "nro")
+  
+zeros <- df_1x1_grid %>%  filter(! df_1x1_grid$nro %in% c(df_vis$nro,df_nonvis$nro) ) 
+
+   
+  sim_map <- maakunta2019 %>%
+    st_transform(st_crs(3067)) %>%
+    ggplot() + 
+    geom_sf() +
+    geom_point(data = zeros, aes(euref_x, euref_y), color = "white",  size = 0.000001) +
+    geom_point(data = df_nonvis, aes(euref_x, euref_y), color = "grey", size = 0.000001) +
+    geom_point(data = df_vis, aes(euref_x, euref_y), color = "red", size = 0.000001) +
+    labs(x = "Longitude", y = "Latitude") +
+    theme(legend.position='none',
+          legend.text = element_text(size=10),
+          legend.title.position = "bottom"
+    )
+  sim_map
+  sim_maps <- c(sim_maps, list(sim_map))
+  ggsave(filename = paste0("../results/sim_",n,".pdf"  )
+         
+  )
+}
+```
+
+```{r}
+
+sim_maps_combined <- ggarrange(
+  sim_maps[[1]]  + theme(
+    plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0,"cm"))
+  , # B
+  sim_maps[[2]] + theme(
+    plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0,"cm"))
+  , # C
+  sim_maps[[3]] + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0.1,"cm"))
+  , # D
+  sim_maps[[4]] + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0,"cm"))
+  , # E
+  sim_maps[[5]] + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0,"cm"))
+  , # F
+  labels = c("A","B","C","D","E"),
+  align='hv',
+  #hjust=-1, 
+  vjust=1
+  )
+sim_maps_combined
+
+```
+
+
+
+
+
+
+```{r}
+
+ggsave(filename = "../results/reached_1x1_all.pdf",
+       plot = sim_maps_combined,  
+       width = 180,
+       height = 180,
+       units = "mm",
+       dpi=600
+)
+
+# does not plot labels, so pdf is better
+ggsave(filename = "../results/reached_1x1_all.png",
+       plot = sim_maps_combined,  
+       width = 180,
+       height = 180,
+       units = "mm",
+       dpi=600
+)
+
+
+```

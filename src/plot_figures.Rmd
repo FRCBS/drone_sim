@@ -550,6 +550,7 @@ bcd20 <- result_list
 load("../results/BCD_25_locations.RData")
 bcd25 <- result_list
 
+# speed 100 km/h and half-range 50 km
 result_list <- list(
   "bcd05" = bcd05,
   "bcd10" = bcd10,

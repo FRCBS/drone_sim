@@ -492,7 +492,7 @@ ggsave(filename = "../results/included_hospitals_all.pdf",
        dpi=600
 )
 
-# does not plot labels, so pdf is better
+
 ggsave(filename = "../results/included_hospitals_all.png",
        plot = includedmaps_combined,  
        width = 180,
@@ -567,15 +567,24 @@ result_list <- list(
 # get the visited squares
 visited <- result_list$bcd05
 # Take the union of the INDICES of handled locations over the simulations
-temp<- Reduce(union, lapply(visited, function(x) x$handled_event_locations))
+temp<- as.data.frame(table(unlist((lapply(visited, function(x) x$handled_event_locations)))))
+temp <- temp %>% 
+  mutate(
+    nro = as.numeric(as.character(Var1)),
+    Freq = Freq/ length(visited) # to have average times visited per year
+  ) %>% select(-Var1)
+
+
 # And attach the temporary coordinates from $nro to the indices 
 temp2 <- list() # 
-temp2$nro=traumpred$nro[temp]
+temp2$nro=traumpred$nro[temp$nro]
+temp2$freq=temp$Freq
 # And finally combine the temporary coordinates to real (euref-) coordinates
 df_vis <- merge(x=temp2, y = df_1x1_grid, by = "nro")
+#df_vis2 <- merge(x=temp, y = df_vis, by = "nro")
 
 
-# Take the union of the INDICES of handled locations over the simulations
+# Take the union of the INDICES of non handled locations over the simulations
 temp<- Reduce(union, lapply(visited, function(x) x$non_handled_event_locations))
 # And attach the temporary coordinates from $nro to the indices 
 temp2 <- list() # 
@@ -591,12 +600,19 @@ traumas_map <- maakunta2019 %>%
   geom_sf() +
   geom_point(data = zeros, aes(euref_x, euref_y), color = "white",  size = 0.000001) +
   geom_point(data = df_nonvis, aes(euref_x, euref_y), color = "grey", size = 0.000001) +
-  geom_point(data = df_vis, aes(euref_x, euref_y), color = "red", size = 0.000001) +
+  #geom_point(data = df_vis, aes(euref_x, euref_y), color = "red", size = 0.000001) +
+  geom_point(data = df_vis, aes(euref_x, euref_y, color = freq), size = 0.000001) +
   labs(x = "Longitude", y = "Latitude") +
-theme(legend.position='none',
+theme(#legend.position='none',
         legend.text = element_text(size=10),
         legend.title.position = "bottom"
-        )
+        ) +
+  scale_color_gradient(name = "Times \nvisited", 
+                       trans = "log", 
+                       breaks = waiver(),
+                        #breaks = round(waiver(),3)#, 
+                       labels = scales::label_percent(accuracy = 3)
+                       )
 traumas_map
 
 
@@ -606,20 +622,34 @@ traumas_map
 ## Combined map
 
 ```{r}
+#extract legend as they are identical
+legend_sep <- ggpubr::get_legend(traumas_map)
 
+as_ggplot(legend_sep)
+```
+
+
+```{r}
 # n corresponds to number of used hospitals (0 = 0, 1 = 5, 2 = 10, 3 = 15, 4 = 20 , 5 = 25)
 sim_maps <- list()
 for (n in names(result_list)) {
   # get the visited squares
   visited <- result_list[[n]]
-  # Take the union of the INDICES of handled locations over the simulations
-  temp<- Reduce(union, lapply(visited, function(x) x$handled_event_locations))
+  temp<- as.data.frame(table(unlist((lapply(visited, function(x) x$handled_event_locations)))))
+  temp <- temp %>% 
+  mutate(
+    nro = as.numeric(as.character(Var1)),
+    Freq = Freq/ length(visited) # to have average times visited per year
+  ) %>% select(-Var1)
   # And attach the temporary coordinates from $nro to the indices 
   temp2 <- list() # 
-  temp2$nro=traumpred$nro[temp]
+  temp2$nro=traumpred$nro[temp$nro]
+  temp2$freq=temp$Freq
   # And finally combine the temporary coordinates to real (euref-) coordinates
   df_vis <- merge(x=temp2, y = df_1x1_grid, by = "nro")
-  
+  cat(n,"\n")
+  print(summary(df_vis))
+  cat("Proportion of sites visited only once: ",nrow((df_vis %>% filter(freq == 0.001))) / nrow(df_vis) ,"\n")
   # Take the union of the INDICES of handled locations over the simulations
   temp<- Reduce(union, lapply(visited, function(x) x$non_handled_event_locations))
   # And attach the temporary coordinates from $nro to the indices 
@@ -637,12 +667,19 @@ zeros <- df_1x1_grid %>%  filter(! df_1x1_grid$nro %in% c(df_vis$nro,df_nonvis$n
     geom_sf() +
     geom_point(data = zeros, aes(euref_x, euref_y), color = "white",  size = 0.000001) +
     geom_point(data = df_nonvis, aes(euref_x, euref_y), color = "grey", size = 0.000001) +
-    geom_point(data = df_vis, aes(euref_x, euref_y), color = "red", size = 0.000001) +
-    labs(x = "Longitude", y = "Latitude") +
+     geom_point(data = df_vis, aes(euref_x, euref_y, color = freq), size = 0.000001) +    labs(x = "Longitude", y = "Latitude") +
     theme(legend.position='none',
           legend.text = element_text(size=10),
           legend.title.position = "bottom"
-    )
+    ) +   scale_color_gradient(name = "freq", 
+                       trans = "log", 
+                       breaks = waiver(),
+                       labels = scales::label_percent(accuracy = 3)
+                       )
+  # if (n == "bcd25") {
+  # sim_map <- sim_map +   theme(legend.position='right')
+  # }
+  
   sim_map
   sim_maps <- c(sim_maps, list(sim_map))
   ggsave(filename = paste0("../results/sim_",n,".pdf"  )
@@ -661,15 +698,18 @@ sim_maps_combined <- ggarrange(
     plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0,"cm"))
   , # C
   sim_maps[[3]] + theme(
-    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0.1,"cm"))
+    plot.margin = margin(t = 0.1, r = 0, b = 0, l = 0.1,"cm"))
   , # D
   sim_maps[[4]] + theme(
     plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0,"cm"))
   , # E
   sim_maps[[5]] + theme(
     plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0,"cm"))
-  , # F
-  labels = c("A","B","C","D","E"),
+  , # F,
+  as_ggplot(legend_sep) + theme(
+    plot.margin = margin(t = 0, r = 0, b = 0.1, l = 0.1,"cm"))
+  ,
+  labels = c("A","B","C","D","E",""),
   align='hv',
   #hjust=-1, 
   vjust=1
@@ -693,7 +733,7 @@ ggsave(filename = "../results/reached_1x1_all.pdf",
        dpi=600
 )
 
-# does not plot labels, so pdf is better
+
 ggsave(filename = "../results/reached_1x1_all.png",
        plot = sim_maps_combined,  
        width = 180,

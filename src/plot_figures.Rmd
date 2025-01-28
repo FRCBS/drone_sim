@@ -612,7 +612,7 @@ theme(#legend.position='none',
                        trans = "log", 
                        breaks = waiver(),
                         #breaks = round(waiver(),3)#, 
-                       labels = scales::label_percent(accuracy = 3)
+                       labels = scales::label_percent(accuracy = 1)
                        )
 traumas_map
 
@@ -675,11 +675,8 @@ zeros <- df_1x1_grid %>%  filter(! df_1x1_grid$nro %in% c(df_vis$nro,df_nonvis$n
     ) +   scale_color_gradient(name = "freq", 
                        trans = "log", 
                        breaks = waiver(),
-                       labels = scales::label_percent(accuracy = 3)
+                       labels = scales::label_percent(accuracy = 4)
                        )
-  # if (n == "bcd25") {
-  # sim_map <- sim_map +   theme(legend.position='right')
-  # }
   
   sim_map
   sim_maps <- c(sim_maps, list(sim_map))
